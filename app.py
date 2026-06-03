@@ -5,6 +5,7 @@ from models import db, Tenant, User, Conversation, Order, Customer
 from auth import generate_token, token_required
 from middleware import tenant_scoped, TenantFilter
 import uuid
+from flask_cors import CORS
 
 """
 Flowmerce — Multi-tenant Social Commerce Backend
@@ -22,6 +23,7 @@ All queries are scoped to request.tenant_id via @tenant_scoped decorator.
 """
 
 app = Flask(__name__)
+CORS(app)
 
 # Load config based on FLASK_ENV
 config = get_config()
