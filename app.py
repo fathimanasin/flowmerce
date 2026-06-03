@@ -31,7 +31,10 @@ app.config.from_object(config)
 db.init_app(app)
 
 with app.app_context():
-    pass  # Skip db creation on startup
+    try:
+        db.create_all()
+    except Exception as e:
+        print(f"Tables may already exist: {e}")
 
 # ============= HEALTH CHECK =============
 @app.route('/health', methods=['GET'])
