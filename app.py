@@ -335,6 +335,65 @@ def get_order(order_id):
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+    # ============= WHATSAPP WEBHOOK =============
+@app.route('/webhook/whatsapp', methods=['GET'])
+def verify_whatsapp_webhook():
+    """Webhook verification (required by Meta)"""
+    verify_token = request.args.get('hub.verify_token')
+    challenge = request.args.get('hub.challenge')
+    
+    expected_token = os.getenv('WHATSAPP_WEBHOOK_VERIFY_TOKEN', 'test_token')
+    
+    if verify_token == expected_token:
+        return challenge
+    return 'Invalid verify token', 403
+
+@app.route('/webhook/whatsapp', methods=['POST'])
+def receive_whatsapp_message():
+    """Receive incoming WhatsApp message from Meta"""
+    try:
+        data = request.get_json()
+        
+        # Extract message from Meta's webhook payload
+        for entry in data.get('entry', []):
+            for change in entry.get('changes', []):
+                value = change.get('value', {})
+                
+                # Check if this is a message event
+                messages = value.get('messages', [])
+                for message in messages:
+                    phone_number = message.get('from')
+                    message_text = message.get('text', {}).get('body', '')
+                    message_id = message.get('id')
+                    
+                    # Get tenant from request headers (for now, use first tenant)
+                    # In production, match phone to tenant
+                    tenant = Tenant.query.first()
+                    if not tenant:
+                        continue
+                    
+                    # Create conversation record
+                    conversation = Conversation(
+                        id=str(uuid.uuid4()),
+                        tenant_id=tenant.id,
+                        external_id=message_id,
+                        channel='whatsapp',
+                        customer_phone=phone_number,
+                        message_text=message_text,
+                        message_direction='inbound',
+                        status='open'
+                    )
+                    db.session.add(conversation)
+                
+                db.session.commit()
+        
+        # Meta requires 200 response immediately
+        return jsonify({'status': 'ok'}), 200
+    
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ============= ERROR HANDLERS =============
 @app.errorhandler(404)
