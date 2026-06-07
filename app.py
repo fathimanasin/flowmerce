@@ -1,4 +1,5 @@
 import os
+import logging
 from flask import Flask, jsonify, request
 from config import get_config
 from models import db, Tenant, User, Conversation, Order, Customer
@@ -6,6 +7,8 @@ from auth import generate_token, token_required
 from middleware import tenant_scoped, TenantFilter
 import uuid
 from flask_cors import CORS
+
+logger = logging.getLogger(__name__)
 
 """
 Flowmerce — Multi-tenant Social Commerce Backend
@@ -335,8 +338,8 @@ def get_order(order_id):
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
-    # ============= WHATSAPP WEBHOOK =============
+
+# ============= WHATSAPP WEBHOOK =============
 @app.route('/webhook/whatsapp', methods=['GET'])
 def verify_whatsapp_webhook():
     """Webhook verification (required by Meta)"""
@@ -344,6 +347,8 @@ def verify_whatsapp_webhook():
     challenge = request.args.get('hub.challenge')
     
     expected_token = os.getenv('WHATSAPP_WEBHOOK_VERIFY_TOKEN', 'test_token')
+    
+    logger.info(f"Webhook verification: verify_token={verify_token}, expected={expected_token}")
     
     if verify_token == expected_token:
         return challenge
@@ -354,6 +359,7 @@ def receive_whatsapp_message():
     """Receive incoming WhatsApp message from Meta"""
     try:
         data = request.get_json()
+        logger.info(f"Webhook received data: {data}")
         
         # Extract message from Meta's webhook payload
         for entry in data.get('entry', []):
@@ -362,16 +368,23 @@ def receive_whatsapp_message():
                 
                 # Check if this is a message event
                 messages = value.get('messages', [])
+                logger.info(f"Found {len(messages)} messages in webhook")
+                
                 for message in messages:
                     phone_number = message.get('from')
                     message_text = message.get('text', {}).get('body', '')
                     message_id = message.get('id')
                     
+                    logger.info(f"Processing message: id={message_id}, from={phone_number}, text={message_text}")
+                    
                     # Get tenant from request headers (for now, use first tenant)
                     # In production, match phone to tenant
                     tenant = Tenant.query.first()
                     if not tenant:
+                        logger.error("No tenant found!")
                         continue
+                    
+                    logger.info(f"Saving message to tenant: {tenant.id}")
                     
                     # Create conversation record
                     conversation = Conversation(
@@ -387,12 +400,13 @@ def receive_whatsapp_message():
                     db.session.add(conversation)
                 
                 db.session.commit()
+                logger.info("Messages committed to database")
         
         # Meta requires 200 response immediately
         return jsonify({'status': 'ok'}), 200
     
     except Exception as e:
-        print(f"Webhook error: {e}")
+        logger.error(f"Webhook error: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 # ============= ERROR HANDLERS =============
