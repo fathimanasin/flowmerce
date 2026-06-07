@@ -348,7 +348,7 @@ def verify_whatsapp_webhook():
     
     expected_token = os.getenv('WHATSAPP_WEBHOOK_VERIFY_TOKEN', 'test_token')
     
-    logger.info(f"Webhook verification: verify_token={verify_token}, expected={expected_token}")
+    print(f"Webhook verification: verify_token={verify_token}, expected={expected_token}", flush=True)
     
     if verify_token == expected_token:
         return challenge
